@@ -14,6 +14,7 @@ __pycache__/
 dist/
 build/
 *.whl
+.pytest_cache/
 
 # Virtual environment
 .venv/
@@ -35,14 +36,6 @@ env/
 .DS_Store
 Thumbs.db
 
-# Foundry
-casting/casting.yaml.lock
-pours/
-
-# Testing
-.coverage
-htmlcov/
-.pytest_cache/
-
-# Streamlit
-.streamlit/
+# Foundry lock files
+infra/casting.yaml.lock
+**/pours/

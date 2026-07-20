@@ -1,10 +1,12 @@
 """Project Entropy CLI - Run experiments and view results."""
 
+import asyncio
 import os
 import typer
 from typing import Optional
 
 from entropy.agent import run_agent
+from entropy.evaluator import EvaluatorAgent
 from entropy.otel import setup_otel
 
 app = typer.Typer()
@@ -53,13 +55,37 @@ def run(
 @app.command()
 def evaluate(
     trace_id: str = typer.Argument(..., help="Trace ID to evaluate"),
+    backend: str = typer.Option("rest", help="Backend type: rest or mcp"),
 ):
     """Evaluate a trace and generate a post-mortem report."""
     typer.echo(f"Evaluating trace: {trace_id}")
-    typer.echo("  Connecting to SigNoz MCP server...")
-    typer.echo("  Retrieving span tree...")
-    typer.echo("  Generating post-mortem report...")
-    typer.echo("  Report ready.")
+    typer.echo(f"  Backend: {backend}")
+
+    os.environ["SIGNOZ_BACKEND_MODE"] = backend
+
+    async def _run():
+        evaluator = EvaluatorAgent()
+        try:
+            report = await evaluator.evaluate(trace_id)
+            return report
+        finally:
+            await evaluator.backend.close()
+
+    report = asyncio.run(_run())
+
+    typer.echo("")
+    typer.echo("Post-Mortem Report")
+    typer.echo("=" * 40)
+    typer.echo(f"  Trace ID:          {report.trace_id}")
+    typer.echo(f"  Injected Fault:    {report.injected_fault_type.value}")
+    typer.echo(f"  Outcome:           {report.outcome.value}")
+    typer.echo(f"  Survival Score:    {report.survival_score}")
+    typer.echo(f"  Confidence Score:  {report.confidence_score}")
+    typer.echo(f"  Recovery Action:   {report.target_recovery_action}")
+    if report.evidence_spans:
+        typer.echo(f"  Evidence Spans:    {', '.join(report.evidence_spans[:5])}")
+    typer.echo("")
+    typer.echo(f"  Summary: {report.summary}")
 
 
 @app.command()

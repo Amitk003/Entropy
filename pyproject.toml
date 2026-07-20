@@ -1,0 +1,50 @@
+[project]
+name = "project-entropy"
+version = "0.1.0"
+description = "Automated resilience testing platform for AI agent systems"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Project Entropy Team"},
+]
+
+dependencies = [
+    "langgraph>=0.3.0",
+    "openai>=1.30.0",
+    "anthropic>=0.30.0",
+    "opentelemetry-sdk>=1.27.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.27.0",
+    "opentelemetry-instrumentation-openai-v2>=0.1.0",
+    "pydantic>=2.7.0",
+    "httpx>=0.27.0",
+    "mcp>=1.0.0",
+    "structlog>=24.0.0",
+    "typer>=0.12.0",
+    "streamlit>=1.36.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "responses>=0.25",
+    "pytest-cov>=5.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["entropy*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["entropy"]

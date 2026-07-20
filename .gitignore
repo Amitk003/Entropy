@@ -1,0 +1,48 @@
+# Project Entropy - .gitignore
+
+# Operation log (memory for coding agent)
+main.log
+
+# Roadmap files (internal planning only)
+ROADMAP.md
+SigNoz*Hackathon*Strategy*.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Foundry
+casting/casting.yaml.lock
+pours/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Streamlit
+.streamlit/

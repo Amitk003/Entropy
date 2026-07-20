@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "title": "Chaos Engineering Command Center",
+  "description": "Live dashboard for monitoring chaos experiment results, agent survival rates, and fault distribution. Import this file into SigNoz via the Dashboards tab.",
+  "panels": [
+    {
+      "id": "survival-gauge",
+      "title": "Chaos Survival Rate",
+      "description": "Weighted survival score (0.0-1.0) across all experiments where chaos.injected=true",
+      "panel_type": "gauge",
+      "query": {
+        "aggregate_operator": "avg",
+        "aggregate_attribute": "chaos.survival_score",
+        "filters": [
+          {"key": "chaos.injected", "operator": "=", "value": "true"}
+        ],
+        "group_by": [],
+        "limit": 1,
+        "order_by": "DESC",
+        "step_interval": 60
+      },
+      "unit": "number",
+      "thresholds": [
+        {"value": 0.0, "color": "red"},
+        {"value": 0.4, "color": "orange"},
+        {"value": 0.7, "color": "yellow"},
+        {"value": 1.0, "color": "green"}
+      ]
+    },
+    {
+      "id": "latency-p95",
+      "title": "P95 Latency by Fault Type",
+      "description": "95th percentile span duration grouped by fault type",
+      "panel_type": "timeseries",
+      "query": {
+        "aggregate_operator": "p95",
+        "aggregate_attribute": "duration",
+        "filters": [
+          {"key": "chaos.injected", "operator": "=", "value": "true"}
+        ],
+        "group_by": ["chaos.fault_type"],
+        "limit": 10,
+        "order_by": "DESC",
+        "step_interval": 60
+      },
+      "unit": "ms"
+    },
+    {
+      "id": "token-cost",
+      "title": "Token Cost Inefficiency",
+      "description": "Total token usage grouped by survival score tier",
+      "panel_type": "bar",
+      "query": {
+        "aggregate_operator": "sum",
+        "aggregate_attribute": "gen_ai.usage.total_tokens",
+        "filters": [
+          {"key": "chaos.injected", "operator": "=", "value": "true"}
+        ],
+        "group_by": ["chaos.survival_tier"],
+        "limit": 10,
+        "order_by": "DESC",
+        "step_interval": 60
+      },
+      "unit": "number"
+    },
+    {
+      "id": "fault-distribution",
+      "title": "Fault Distribution",
+      "description": "Breakdown of injected fault types",
+      "panel_type": "pie",
+      "query": {
+        "aggregate_operator": "count",
+        "aggregate_attribute": "*",
+        "filters": [
+          {"key": "chaos.injected", "operator": "=", "value": "true"}
+        ],
+        "group_by": ["chaos.fault_type"],
+        "limit": 10,
+        "order_by": "DESC",
+        "step_interval": 60
+      },
+      "unit": "number"
+    },
+    {
+      "id": "error-analysis",
+      "title": "Error Message Analysis",
+      "description": "Most frequent error messages from failed spans",
+      "panel_type": "table",
+      "query": {
+        "aggregate_operator": "count",
+        "aggregate_attribute": "*",
+        "filters": [
+          {"key": "status.code", "operator": "=", "value": "ERROR"}
+        ],
+        "group_by": ["error.message"],
+        "limit": 20,
+        "order_by": "DESC",
+        "step_interval": 60
+      },
+      "unit": "number"
+    },
+    {
+      "id": "confidence-trend",
+      "title": "Evaluator Confidence Trend",
+      "description": "Confidence score from Evaluator Agent reports over time",
+      "panel_type": "timeseries",
+      "query": {
+        "aggregate_operator": "avg",
+        "aggregate_attribute": "chaos.confidence_score",
+        "filters": [
+          {"key": "chaos.injected", "operator": "=", "value": "true"}
+        ],
+        "group_by": [],
+        "limit": 1,
+        "order_by": "DESC",
+        "step_interval": 60
+      },
+      "unit": "number",
+      "thresholds": [
+        {"value": 0.0, "color": "red"},
+        {"value": 0.5, "color": "orange"},
+        {"value": 0.7, "color": "green"}
+      ]
+    }
+  ],
+  "layout": {
+    "panels": [
+      {"id": "survival-gauge", "x": 0, "y": 0, "w": 4, "h": 3},
+      {"id": "latency-p95", "x": 4, "y": 0, "w": 8, "h": 3},
+      {"id": "fault-distribution", "x": 0, "y": 3, "w": 4, "h": 3},
+      {"id": "token-cost", "x": 4, "y": 3, "w": 4, "h": 3},
+      {"id": "confidence-trend", "x": 8, "y": 3, "w": 4, "h": 3},
+      {"id": "error-analysis", "x": 0, "y": 6, "w": 12, "h": 4}
+    ]
+  },
+  "variables": [],
+  "refresh_interval": "30s"
+}

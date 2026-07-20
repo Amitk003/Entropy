@@ -1,22 +1,48 @@
 """Project Entropy CLI - Run experiments and view results."""
 
+import os
 import typer
 from typing import Optional
+
+from entropy.agent import run_agent
+from entropy.otel import setup_otel
 
 app = typer.Typer()
 
 
 @app.command()
 def run(
+    input_text: str = typer.Option("Lookup customer C001", help="Input text for the agent"),
     mode: str = typer.Option("baseline", help="Run mode: baseline or chaos"),
     fault: Optional[str] = typer.Option(None, help="Fault type for chaos mode"),
     experiment_id: Optional[str] = typer.Option(None, help="Experiment identifier"),
 ):
-    """Run a target agent workflow with optional chaos injection."""
+    """Run the target agent with optional chaos injection."""
+    tracer = setup_otel()
+    thread_id = experiment_id or "test-run"
+
     typer.echo(f"Running in {mode} mode...")
+    typer.echo(f"  Input: {input_text}")
+
     if mode == "chaos" and fault:
+        os.environ["CHAOS_FAULT_TYPE"] = fault
+        os.environ["CHAOS_ENABLED"] = "true"
         typer.echo(f"  Injecting fault: {fault}")
-    typer.echo("Workflow complete. Trace ID: example-trace-id")
+
+    with tracer.start_as_current_span("entropy-run") as span:
+        span.set_attribute("run.mode", mode)
+        span.set_attribute("run.input", input_text)
+
+        result = run_agent(input_text, thread_id)
+
+        span.set_attribute("run.response", result.get("response", ""))
+
+    typer.echo(f"  Response: {result.get('response', 'No response')}")
+    typer.echo(f"  Trace ID: {thread_id}")
+
+    if mode == "chaos":
+        os.environ.pop("CHAOS_FAULT_TYPE", None)
+        os.environ.pop("CHAOS_ENABLED", None)
 
 
 @app.command()

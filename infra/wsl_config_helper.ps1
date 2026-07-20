@@ -1,5 +1,6 @@
 # WSL 2 Resource Optimization Script
-# Run this in PowerShell as Administrator before deploying SigNoz.
+# Run this in PowerShell as Administrator:
+#   powershell -ExecutionPolicy Bypass -File .\infra\wsl_config_helper.ps1
 # This prevents ClickHouse from crashing with EOF errors during schema migration.
 
 $wslConfigPath = "$env:USERPROFILE\.wslconfig"

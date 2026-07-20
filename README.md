@@ -32,9 +32,20 @@ Target Agent (LangGraph)  -->  Chaos Injector (decorator + transport middleware)
 
 ## Quick Start
 
+### 0. Windows WSL 2 Resource Setup (If running locally on Windows)
+Run the optimization helper in PowerShell as Administrator to allocate enough memory for ClickHouse:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\infra\wsl_config_helper.ps1
+```
+Or run this lazy one-liner directly in PowerShell:
+```powershell
+"[wsl2]`nmemory=8GB`nprocessors=4" | Out-File "$home\.wslconfig" -Encoding ascii; wsl --shutdown
+```
+
+### 1. Deploy the observability stack
 ```bash
-# 1. Deploy the observability stack
-foundryctl cast -f casting/casting.yaml
+foundryctl cast -f infra/casting.yaml
+```
 
 # 2. Set up your environment
 cp .env.example .env

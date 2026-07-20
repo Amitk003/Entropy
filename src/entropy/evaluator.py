@@ -15,6 +15,11 @@ from entropy.models import (
 )
 
 
+_LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "openai").lower()
+_GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+_OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+
+
 _LLM_JUDGE_PROMPT = """
 You are an SRE Copilot and LLM-as-a-Judge.
 Analyze the following OpenTelemetry trace data from a chaos engineering experiment.
@@ -269,40 +274,77 @@ class EvaluatorAgent:
         """Evaluate a trace and produce a structured post-mortem report."""
         trace_data = await self._fetch_trace_data(trace_id)
 
-        # Try real LLM-as-a-Judge evaluation first if API key is present
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if api_key:
-            client = None
+        prompt = _LLM_JUDGE_PROMPT.format(
+            trace_data=json.dumps(trace_data, indent=2),
+        )
+
+        if _LLM_PROVIDER == "gemini":
+            content = await self._call_gemini(prompt)
+        else:
+            content = await self._call_openai(prompt)
+
+        if content is not None:
             try:
-                from openai import AsyncOpenAI
-                client = AsyncOpenAI(api_key=api_key)
-                model = os.environ.get("OPENAI_MODEL", "gpt-4o")
-
-                prompt = _LLM_JUDGE_PROMPT.format(
-                    trace_data=json.dumps(trace_data, indent=2),
-                )
-
-                response = await client.chat.completions.create(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": "You are a professional SRE trace analyzer agent. Output JSON only."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    response_format={"type": "json_object"},
-                    timeout=25.0,
-                )
-
-                content = response.choices[0].message.content
-                if content:
-                    data = json.loads(content)
-                    return ExperimentPostmortem.model_validate(data)
+                data = json.loads(content)
+                return ExperimentPostmortem.model_validate(data)
             except Exception as exc:
-                warnings.warn(f"LLM-as-a-Judge query failed: {exc}. Falling back to local rule-based analysis.")
-            finally:
-                if client is not None:
-                    await client.close()
+                warnings.warn(f"LLM response parse failed: {exc}. Falling back to local rule-based analysis.")
 
         return self._analyze_trace(trace_id, trace_data)
+
+    async def _call_openai(self, prompt: str) -> Optional[str]:
+        """Call OpenAI and return the response text, or None on failure."""
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            return None
+        client = None
+        try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=api_key)
+            response = await client.chat.completions.create(
+                model=_OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are a professional SRE trace analyzer agent. Output JSON only."},
+                    {"role": "user", "content": prompt},
+                ],
+                response_format={"type": "json_object"},
+                timeout=25.0,
+            )
+            return response.choices[0].message.content
+        except Exception as exc:
+            warnings.warn(f"OpenAI call failed: {exc}")
+            return None
+        finally:
+            if client is not None:
+                await client.close()
+
+    async def _call_gemini(self, prompt: str) -> Optional[str]:
+        """Call Gemini and return the response text, or None on failure."""
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            return None
+        client = None
+        try:
+            from google import genai
+            from google.genai import types
+            client = genai.Client(api_key=api_key)
+            response = await client.aio.models.generate_content(
+                model=_GEMINI_MODEL,
+                contents=[
+                    {"role": "user", "parts": [{"text": "You are a professional SRE trace analyzer agent. Output JSON only."}]},
+                    {"role": "user", "parts": [{"text": prompt}]},
+                ],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                ),
+            )
+            return response.text
+        except Exception as exc:
+            warnings.warn(f"Gemini call failed: {exc}")
+            return None
+        finally:
+            if client is not None:
+                await client.aio.close()
 
     async def _fetch_trace_data(self, trace_id: str) -> dict[str, Any]:
         """Fetch trace details from the backend."""

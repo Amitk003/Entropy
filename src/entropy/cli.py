@@ -95,7 +95,11 @@ def config():
     typer.echo("Project Entropy Configuration")
     typer.echo("  SigNoz backend: http://localhost:8000")
     typer.echo("  OTel endpoint: http://localhost:4317")
-    typer.echo("  LLM provider: OpenAI GPT-4o")
+    llm_provider = os.environ.get("LLM_PROVIDER", "openai")
+    if llm_provider == "gemini":
+        typer.echo(f"  LLM provider: Gemini ({os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash')})")
+    else:
+        typer.echo(f"  LLM provider: OpenAI ({os.environ.get('OPENAI_MODEL', 'gpt-4o')})")
 
 
 if __name__ == "__main__":

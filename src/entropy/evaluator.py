@@ -29,6 +29,10 @@ class TraceQueryBackend(ABC):
     async def aggregate_traces(self, query: str) -> dict[str, Any]:
         ...
 
+    @abstractmethod
+    async def close(self):
+        ...
+
 
 class RESTTraceQueryBackend(TraceQueryBackend):
     """Queries SigNoz through its REST API.
@@ -104,6 +108,7 @@ class MCPTraceQueryBackend(TraceQueryBackend):
     def __init__(self, base_url: str = "http://localhost:8000", api_key: str = ""):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
+        self._client = httpx.AsyncClient(timeout=10.0)
         self._rest_fallback = RESTTraceQueryBackend(
             base_url=base_url.replace(":8000", ":8080"),
             api_key=api_key,
@@ -112,47 +117,48 @@ class MCPTraceQueryBackend(TraceQueryBackend):
     async def search_traces(self, query: str) -> list[dict[str, Any]]:
         try:
             headers = {"SIGNOZ-API-KEY": self.api_key} if self.api_key else {}
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    f"{self.base_url}/mcp",
-                    headers=headers,
-                    json={"tool": "signoz_search_traces", "args": {"query": query}},
-                )
-                response.raise_for_status()
-                data = response.json()
-                return data.get("result", [])
+            response = await self._client.post(
+                f"{self.base_url}/mcp",
+                headers=headers,
+                json={"tool": "signoz_search_traces", "args": {"query": query}},
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data.get("result", [])
         except Exception:
             return await self._rest_fallback.search_traces(query)
 
     async def get_trace_details(self, trace_id: str) -> dict[str, Any]:
         try:
             headers = {"SIGNOZ-API-KEY": self.api_key} if self.api_key else {}
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    f"{self.base_url}/mcp",
-                    headers=headers,
-                    json={"tool": "signoz_get_trace_details", "args": {"trace_id": trace_id}},
-                )
-                response.raise_for_status()
-                data = response.json()
-                return data.get("result", {})
+            response = await self._client.post(
+                f"{self.base_url}/mcp",
+                headers=headers,
+                json={"tool": "signoz_get_trace_details", "args": {"trace_id": trace_id}},
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data.get("result", {})
         except Exception:
             return await self._rest_fallback.get_trace_details(trace_id)
 
     async def aggregate_traces(self, query: str) -> dict[str, Any]:
         try:
             headers = {"SIGNOZ-API-KEY": self.api_key} if self.api_key else {}
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    f"{self.base_url}/mcp",
-                    headers=headers,
-                    json={"tool": "signoz_aggregate_traces", "args": {"query": query}},
-                )
-                response.raise_for_status()
-                data = response.json()
-                return data.get("result", {})
+            response = await self._client.post(
+                f"{self.base_url}/mcp",
+                headers=headers,
+                json={"tool": "signoz_aggregate_traces", "args": {"query": query}},
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data.get("result", {})
         except Exception:
             return await self._rest_fallback.aggregate_traces(query)
+
+    async def close(self):
+        await self._client.aclose()
+        await self._rest_fallback.close()
 
 
 def _classify_outcome(survival_score: float) -> SurvivalOutcome:
@@ -239,6 +245,54 @@ class EvaluatorAgent:
     async def evaluate(self, trace_id: str) -> ExperimentPostmortem:
         """Evaluate a trace and produce a structured post-mortem report."""
         trace_data = await self._fetch_trace_data(trace_id)
+
+        # Try real LLM-as-a-Judge evaluation first if API key is present
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if api_key:
+            import warnings
+            try:
+                from openai import AsyncOpenAI
+                client = AsyncOpenAI(api_key=api_key)
+                model = os.environ.get("OPENAI_MODEL", "gpt-4o")
+
+                prompt = f"""
+                You are an SRE Copilot and LLM-as-a-Judge.
+                Analyze the following OpenTelemetry trace data from a chaos engineering experiment.
+                Determine what fault was injected (e.g., timeout, rate-limit, semantic-corruption, memory-poisoning),
+                evaluate how the target agent attempted to recover, identify which span IDs contain errors or faults,
+                and score the agent's resilience.
+
+                Return a JSON object containing precisely the following keys:
+                - "trace_id": "{trace_id}"
+                - "injected_fault_type": "rate-limit" | "timeout" | "semantic-corruption" | "memory-poisoning"
+                - "target_recovery_action": a brief string describing how the agent recovered or failed
+                - "survival_score": a float between 0.0 and 1.0 (1.0 = full recovery, 0.7 = graceful degradation, 0.4 = partial completion, 0.0 = silent failure)
+                - "confidence_score": a float between 0.0 and 1.0 based on trace completeness
+                - "outcome": "full-recovery" | "graceful-degradation" | "partial-completion" | "silent-failure"
+                - "evidence_spans": a list of span IDs containing errors/chaos
+                - "summary": a concise multi-line summary of the experiment, including the trace details
+
+                Trace Data:
+                {json.dumps(trace_data, indent=2)}
+                """
+
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": "You are a professional SRE trace analyzer agent. Output JSON only."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format={"type": "json_object"},
+                    timeout=25.0
+                )
+
+                content = response.choices[0].message.content
+                if content:
+                    data = json.loads(content)
+                    return ExperimentPostmortem(**data)
+            except Exception as exc:
+                warnings.warn(f"LLM-as-a-Judge query failed: {exc}. Falling back to local rule-based analysis.")
+
         return self._analyze_trace(trace_id, trace_data)
 
     async def _fetch_trace_data(self, trace_id: str) -> dict[str, Any]:

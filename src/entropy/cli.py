@@ -65,8 +65,11 @@ def evaluate(
 
     async def _run():
         evaluator = EvaluatorAgent()
-        report = await evaluator.evaluate(trace_id)
-        return report
+        try:
+            report = await evaluator.evaluate(trace_id)
+            return report
+        finally:
+            await evaluator.backend.close()
 
     report = asyncio.run(_run())
 

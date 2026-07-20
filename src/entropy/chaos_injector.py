@@ -181,9 +181,9 @@ class ChaosHttpTransport(httpx.AsyncHTTPTransport):
 
         original_aiter = response.aiter_bytes
 
-        async def corrupted_aiter():
+        async def corrupted_aiter(*aiter_args: Any, **aiter_kwargs: Any) -> Any:
             chunk_count = 0
-            async for chunk in original_aiter():
+            async for chunk in original_aiter(*aiter_args, **aiter_kwargs):
                 chunk_count += 1
                 if chunk_count == 2:
                     yield b"CORRUPTED_STREAM_CHUNK"

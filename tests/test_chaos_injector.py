@@ -136,3 +136,35 @@ async def test_chaos_http_transport_passthrough_when_disabled():
     ):
         result = await transport.handle_async_request(mock_request)
         assert result is not None
+
+
+@pytest.mark.asyncio
+@patch("random.random", return_value=0.1)
+async def test_chaos_http_transport_corrupts_stream_with_args(mock_random):
+    transport = ChaosHttpTransport()
+    transport.configure(enabled=True, fault_type="semantic-corruption", probability=0.3)
+
+    mock_request = MagicMock(spec=httpx.Request)
+    mock_response = MagicMock(spec=httpx.Response)
+
+    async def mock_aiter_bytes(chunk_size=None):
+        yield b"chunk1"
+        yield b"chunk2"
+        yield b"chunk3"
+
+    mock_response.aiter_bytes = mock_aiter_bytes
+
+    with patch.object(
+        httpx.AsyncHTTPTransport, "handle_async_request",
+        new=AsyncMock(return_value=mock_response),
+    ):
+        res = await transport.handle_async_request(mock_request)
+        
+        # Verify it handles chunk_size argument successfully and does not throw TypeError
+        chunks = []
+        async for chunk in res.aiter_bytes(chunk_size=1024):
+            chunks.append(chunk)
+
+        assert chunks[0] == b"chunk1"
+        assert chunks[1] == b"CORRUPTED_STREAM_CHUNK"
+        assert chunks[2] == b"chunk3"

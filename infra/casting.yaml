@@ -1,0 +1,20 @@
+apiVersion: v1alpha1
+kind: Installation
+metadata:
+  name: signoz-chaos
+spec:
+  deployment:
+    flavor: compose
+    mode: docker
+  mcp:
+    spec:
+      enabled: true
+  patches:
+    - target: "deployment/compose.yaml"
+      operations:
+        - op: add
+          path: /services/clickhouse/deploy
+          value:
+            resources:
+              limits:
+                memory: 4G

@@ -2,6 +2,7 @@
 
 import json
 import os
+import warnings
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
@@ -12,6 +13,28 @@ from entropy.models import (
     FaultType,
     SurvivalOutcome,
 )
+
+
+_LLM_JUDGE_PROMPT = """
+You are an SRE Copilot and LLM-as-a-Judge.
+Analyze the following OpenTelemetry trace data from a chaos engineering experiment.
+Determine what fault was injected (e.g., timeout, rate-limit, semantic-corruption, memory-poisoning),
+evaluate how the target agent attempted to recover, identify which span IDs contain errors or faults,
+and score the agent's resilience.
+
+Return a JSON object containing precisely the following keys:
+- "trace_id": the trace ID string
+- "injected_fault_type": "rate-limit" | "timeout" | "semantic-corruption" | "memory-poisoning"
+- "target_recovery_action": a brief string describing how the agent recovered or failed
+- "survival_score": a float between 0.0 and 1.0 (1.0 = full recovery, 0.7 = graceful degradation, 0.4 = partial completion, 0.0 = silent failure)
+- "confidence_score": a float between 0.0 and 1.0 based on trace completeness
+- "outcome": "full-recovery" | "graceful-degradation" | "partial-completion" | "silent-failure"
+- "evidence_spans": a list of span IDs containing errors/chaos
+- "summary": a concise multi-line summary of the experiment, including the trace details
+
+Trace Data:
+{trace_data}
+"""
 
 
 class TraceQueryBackend(ABC):
@@ -249,47 +272,29 @@ class EvaluatorAgent:
         # Try real LLM-as-a-Judge evaluation first if API key is present
         api_key = os.environ.get("OPENAI_API_KEY")
         if api_key:
-            import warnings
             try:
                 from openai import AsyncOpenAI
                 client = AsyncOpenAI(api_key=api_key)
                 model = os.environ.get("OPENAI_MODEL", "gpt-4o")
 
-                prompt = f"""
-                You are an SRE Copilot and LLM-as-a-Judge.
-                Analyze the following OpenTelemetry trace data from a chaos engineering experiment.
-                Determine what fault was injected (e.g., timeout, rate-limit, semantic-corruption, memory-poisoning),
-                evaluate how the target agent attempted to recover, identify which span IDs contain errors or faults,
-                and score the agent's resilience.
-
-                Return a JSON object containing precisely the following keys:
-                - "trace_id": "{trace_id}"
-                - "injected_fault_type": "rate-limit" | "timeout" | "semantic-corruption" | "memory-poisoning"
-                - "target_recovery_action": a brief string describing how the agent recovered or failed
-                - "survival_score": a float between 0.0 and 1.0 (1.0 = full recovery, 0.7 = graceful degradation, 0.4 = partial completion, 0.0 = silent failure)
-                - "confidence_score": a float between 0.0 and 1.0 based on trace completeness
-                - "outcome": "full-recovery" | "graceful-degradation" | "partial-completion" | "silent-failure"
-                - "evidence_spans": a list of span IDs containing errors/chaos
-                - "summary": a concise multi-line summary of the experiment, including the trace details
-
-                Trace Data:
-                {json.dumps(trace_data, indent=2)}
-                """
+                prompt = _LLM_JUDGE_PROMPT.format(
+                    trace_data=json.dumps(trace_data, indent=2),
+                )
 
                 response = await client.chat.completions.create(
                     model=model,
                     messages=[
                         {"role": "system", "content": "You are a professional SRE trace analyzer agent. Output JSON only."},
-                        {"role": "user", "content": prompt}
+                        {"role": "user", "content": prompt},
                     ],
                     response_format={"type": "json_object"},
-                    timeout=25.0
+                    timeout=25.0,
                 )
 
                 content = response.choices[0].message.content
                 if content:
                     data = json.loads(content)
-                    return ExperimentPostmortem(**data)
+                    return ExperimentPostmortem.model_validate(data)
             except Exception as exc:
                 warnings.warn(f"LLM-as-a-Judge query failed: {exc}. Falling back to local rule-based analysis.")
 

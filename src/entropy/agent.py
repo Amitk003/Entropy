@@ -45,10 +45,13 @@ def lookup_customer(state: AgentState) -> dict[str, Any]:
             customer_id = word
             break
 
-    result = mock_db_lookup(customer_id)
-    if result.get("success"):
-        return {"customer_data": result["data"]}
-    return {"customer_data": {}, "error": result.get("error", "Lookup failed")}
+    try:
+        result = mock_db_lookup(customer_id)
+        if result.get("success"):
+            return {"customer_data": result["data"]}
+        return {"customer_data": {}, "error": result.get("error", "Lookup failed")}
+    except Exception as exc:
+        return {"customer_data": {}, "error": f"Lookup failed: {exc}"}
 
 
 def execute_api_call(state: AgentState) -> dict[str, Any]:
@@ -61,10 +64,13 @@ def execute_api_call(state: AgentState) -> dict[str, Any]:
         "plan": customer.get("plan", "unknown"),
     }
 
-    result = mock_api_call(intent, payload)
-    if result.get("success"):
-        return {"api_result": result["data"]}
-    return {"api_result": {}, "error": result.get("error", "API call failed")}
+    try:
+        result = mock_api_call(intent, payload)
+        if result.get("success"):
+            return {"api_result": result["data"]}
+        return {"api_result": {}, "error": result.get("error", "API call failed")}
+    except Exception as exc:
+        return {"api_result": {}, "error": f"API call failed: {exc}"}
 
 
 def generate_response(state: AgentState) -> dict[str, Any]:

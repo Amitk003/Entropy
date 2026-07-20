@@ -175,8 +175,12 @@ class TestMCPTraceQueryBackend:
         mcp_backend = MCPTraceQueryBackend(api_key="test-key")
 
         with patch.object(
-            mcp_backend._rest_fallback, "get_trace_details",
-            new=AsyncMock(return_value={"trace_id": "fallback", "spans": []}),
+            mcp_backend._client, "post",
+            new=AsyncMock(side_effect=Exception("MCP connection failed")),
         ):
-            result = await mcp_backend.get_trace_details("test-id")
-            assert result["trace_id"] == "fallback"
+            with patch.object(
+                mcp_backend._rest_fallback, "get_trace_details",
+                new=AsyncMock(return_value={"trace_id": "fallback", "spans": []}),
+            ):
+                result = await mcp_backend.get_trace_details("test-id")
+                assert result["trace_id"] == "fallback"

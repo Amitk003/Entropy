@@ -9,11 +9,3 @@ spec:
   mcp:
     spec:
       enabled: true
-  patches:
-    - target: "deployment/compose.yaml"
-      operations:
-        - op: add
-          path: /services/clickhouse/deploy/resources
-          value:
-            limits:
-              memory: 4G

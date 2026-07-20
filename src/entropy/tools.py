@@ -4,7 +4,10 @@ import json
 import random
 from typing import Any
 
+from entropy.chaos_injector import chaos_injectable
 
+
+@chaos_injectable
 def mock_db_lookup(query: str) -> dict[str, Any]:
     """Simulate a database lookup. Returns mock customer data."""
     customers = {
@@ -19,6 +22,7 @@ def mock_db_lookup(query: str) -> dict[str, Any]:
     return {"success": False, "error": "Customer not found"}
 
 
+@chaos_injectable
 def mock_api_call(endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Simulate an external API call."""
     # Simulate some endpoints

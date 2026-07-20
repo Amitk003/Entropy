@@ -32,10 +32,16 @@ Target Agent (LangGraph)  -->  Chaos Injector (decorator + transport middleware)
 
 ## Quick Start
 
-If you are on Windows with WSL 2, run this in PowerShell as Administrator first to allocate enough memory for ClickHouse:
+If you are on Windows with WSL 2, run this in PowerShell as Administrator (from the repository root) to allocate enough memory for ClickHouse:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\infra\wsl_config_helper.ps1
+```
+
+Or run this lazy one-liner directly in PowerShell:
+
+```powershell
+"[wsl2]`nmemory=8GB`nprocessors=4" | Out-File "$env:USERPROFILE\.wslconfig" -Encoding ascii; wsl --shutdown
 ```
 
 Then run these commands:

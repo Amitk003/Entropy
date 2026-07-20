@@ -272,6 +272,7 @@ class EvaluatorAgent:
         # Try real LLM-as-a-Judge evaluation first if API key is present
         api_key = os.environ.get("OPENAI_API_KEY")
         if api_key:
+            client = None
             try:
                 from openai import AsyncOpenAI
                 client = AsyncOpenAI(api_key=api_key)
@@ -297,6 +298,9 @@ class EvaluatorAgent:
                     return ExperimentPostmortem.model_validate(data)
             except Exception as exc:
                 warnings.warn(f"LLM-as-a-Judge query failed: {exc}. Falling back to local rule-based analysis.")
+            finally:
+                if client is not None:
+                    await client.close()
 
         return self._analyze_trace(trace_id, trace_data)
 
@@ -327,10 +331,13 @@ class EvaluatorAgent:
             raw_fault = attrs.get("chaos.fault_type", "")
             if raw_fault == "rate-limit":
                 fault_type = FaultType.RATE_LIMIT
+                break
             elif raw_fault == "semantic-corruption":
                 fault_type = FaultType.SEMANTIC_CORRUPTION
+                break
             elif raw_fault == "memory-poisoning":
                 fault_type = FaultType.MEMORY_POISONING
+                break
 
         # Analyze recovery based on span statuses
         error_count = 0

@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import uuid
 import typer
 from typing import Optional
 
@@ -21,7 +22,7 @@ def run(
 ):
     """Run the target agent with optional chaos injection."""
     tracer = setup_otel()
-    thread_id = experiment_id or "test-run"
+    thread_id = experiment_id or str(uuid.uuid4())[:8]
 
     typer.echo(f"Running in {mode} mode...")
     typer.echo(f"  Input: {input_text}")

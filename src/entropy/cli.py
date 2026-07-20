@@ -33,6 +33,11 @@ def run(
         span.set_attribute("run.mode", mode)
         span.set_attribute("run.input", input_text)
 
+        if mode == "chaos":
+            span.set_attribute("chaos.injected", True)
+            span.set_attribute("chaos.fault_type", fault or "unknown")
+            span.set_attribute("chaos.experiment_id", thread_id)
+
         result = run_agent(input_text, thread_id)
 
         span.set_attribute("run.response", result.get("response", ""))

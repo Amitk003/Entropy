@@ -104,13 +104,25 @@ def route_after_classify(state: AgentState) -> Literal["lookup_customer", "execu
 
 def route_after_lookup(state: AgentState) -> Literal["execute_api_call", "generate_response"]:
     """After customer lookup, execute API call or skip if error."""
+    intent = state.get("intent", "unknown")
+    if intent == "customer-lookup":
+        return "generate_response"
     if state.get("customer_data"):
         return "execute_api_call"
     return "generate_response"
 
 
-def build_agent() -> StateGraph:
+# Compiled agent singleton to persist MemorySaver checkpointer across invocations
+_memory_saver = MemorySaver()
+_compiled_agent = None
+
+
+def build_agent() -> Any:
     """Build and compile the LangGraph agent."""
+    global _compiled_agent
+    if _compiled_agent is not None:
+        return _compiled_agent
+
     workflow = StateGraph(AgentState)
 
     workflow.add_node("classify_intent", classify_intent)
@@ -142,8 +154,8 @@ def build_agent() -> StateGraph:
     workflow.add_edge("execute_api_call", "generate_response")
     workflow.add_edge("generate_response", END)
 
-    memory = MemorySaver()
-    return workflow.compile(checkpointer=memory)
+    _compiled_agent = workflow.compile(checkpointer=_memory_saver)
+    return _compiled_agent
 
 
 def run_agent(input_text: str, thread_id: str = "default") -> dict[str, Any]:

@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -33,7 +34,7 @@ async def _run_experiment(input_text: str, fault: str | None) -> dict:
     if fault:
         env["CHAOS_FAULT_TYPE"] = fault
 
-    cmd = ["python", "-m", "entropy.cli", "run", "--mode", "chaos" if fault else "baseline"]
+    cmd = [sys.executable, "-m", "entropy.cli", "run", "--mode", "chaos" if fault else "baseline"]
     if fault:
         cmd.extend(["--fault", fault])
 
